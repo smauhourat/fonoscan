@@ -1,0 +1,21 @@
+# Núcleo (obligatorio)
+numpy>=1.26
+scipy>=1.11
+
+# API y servicio
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+python-multipart>=0.0.9
+
+# Persistencia
+psycopg[binary,pool]>=3.1
+redis>=5.0
+
+# Operación
+prometheus-client>=0.20
+
+# Opcional: segunda etapa neural (ver docs/02-comparativa-fingerprinting.md).
+# Instalar sólo si se activa el motor neural.
+# torch>=2.2
+# faiss-cpu>=1.8

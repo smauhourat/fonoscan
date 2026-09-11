@@ -1,0 +1,100 @@
+# fonoscan — despliegue de referencia (piloto / pre-producción)
+#
+# Para producción: mover db a un servicio gestionado o a un par con réplica,
+# el object storage a S3 real, y los workers a un orquestador (Nomad/K8s) con
+# un worker por canal y anti-afinidad por nodo.
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fonoscan
+      POSTGRES_USER: fonoscan
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cambiar}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=4GB
+      - -c
+      - work_mem=64MB
+      - -c
+      - max_wal_size=8GB
+      - -c
+      - random_page_cost=1.1          # SSD
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fonoscan"]
+      interval: 10s
+      retries: 10
+    ports: ["5432:5432"]
+
+  # Cola de eventos entre workers y persistencia. Redis Streams alcanza para
+  # decenas de canales; con cientos, cambiar a NATS JetStream o Kafka.
+  bus:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy noeviction
+    volumes: [redisdata:/data]
+
+  # Almacenamiento de evidencia de audio.
+  storage:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-fonoscan}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-cambiar-esta-clave}
+    volumes: [miniodata:/data]
+    ports: ["9000:9000", "9001:9001"]
+
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    command: uvicorn fonoscan.api:app --host 0.0.0.0 --port 8080
+    environment:
+      FONOSCAN_API_KEY: ${API_KEY:-cambiar-esta-clave}
+      FONOSCAN_INDEX: /var/lib/fonoscan/index.npz
+      DATABASE_URL: postgresql://fonoscan:${DB_PASSWORD:-cambiar}@db:5432/fonoscan
+    volumes:
+      - indexdata:/var/lib/fonoscan
+    depends_on:
+      db: { condition: service_healthy }
+    ports: ["8080:8080"]
+
+  # Un worker por canal. Escalar con `docker compose up --scale` no sirve aquí
+  # porque cada uno necesita su URL: en producción se generan desde la tabla
+  # `channel` con un supervisor (ver docs/01-arquitectura.md).
+  worker-fm100:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    command: >
+      python -m fonoscan.cli monitor
+        --index /var/lib/fonoscan/index.npz
+        --channel FM100
+        --url ${FM100_URL:-http://stream.example.org/fm100}
+        --evidence-dir /var/lib/fonoscan/evidencia
+        --out /var/lib/fonoscan/plays/FM100.jsonl
+    volumes:
+      - indexdata:/var/lib/fonoscan
+    depends_on: [api]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 2G }
+
+  # Construcción/actualización del índice. Se corre bajo demanda:
+  #   docker compose run --rm indexer
+  indexer:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    command: >
+      python -m fonoscan.cli index
+        --catalog /var/lib/fonoscan/catalogo.csv
+        --out /var/lib/fonoscan/index.npz
+    volumes:
+      - indexdata:/var/lib/fonoscan
+    profiles: ["tools"]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  indexdata:

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read", "Glob", "Grep",
+      "Bash(python -m pytest*)",
+      "Bash(python tests/*)",
+      "Bash(python -m fonoscan.cli*)",
+      "Bash(git status*)", "Bash(git diff*)", "Bash(git log*)",
+      "Bash(ruff*)", "Bash(mypy*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(docker compose up*)",
+      "Bash(psql*)"
+    ]
+  }
+}
