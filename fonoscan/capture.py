@@ -174,10 +174,20 @@ def decode_file(
     ``speed`` != 1.0 aplica cambio de tempo+tono (``asetrate``), que es el tipo
     de alteración que introducen las emisoras al ajustar la grilla. Se usa para
     generar variantes de referencia en el índice.
+
+    El ``aresample`` inicial no es redundante: ``-ar`` es opción de salida y se
+    aplica *después* del grafo de filtros, así que sin él ``asetrate`` recibiría
+    el audio a la tasa nativa del archivo (44,1 kHz típicamente) y lo estiraría
+    por ``tasa_nativa / (sample_rate * speed)`` — un factor de ~5,5, no el ±4 %
+    buscado. Las variantes quedaban inservibles en silencio.
     """
     filters = []
     if abs(speed - 1.0) > 1e-6:
-        filters.append(f"asetrate={int(sample_rate * speed)},aresample={sample_rate}")
+        filters.append(
+            f"aresample={sample_rate},"
+            f"asetrate={int(sample_rate * speed)},"
+            f"aresample={sample_rate}"
+        )
     cmd = [
         ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-nostdin",
         "-i", path, "-vn", "-ac", "1", "-ar", str(sample_rate),

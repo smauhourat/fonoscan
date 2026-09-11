@@ -170,8 +170,101 @@ def test_rejects_unknown_audio() -> None:
     assert falsos == 0
 
 
+# ---------------------------------------------------------------------------
+# Variantes de velocidad (`cli index --robust`)
+# ---------------------------------------------------------------------------
+
+
+def _escribir_wav(path: str, pcm: np.ndarray, sr: int) -> None:
+    from scipy.io import wavfile
+
+    wavfile.write(path, sr, (np.clip(pcm, -1, 1) * 32767).astype(np.int16))
+
+
+def test_speed_variants() -> None:
+    """Las variantes de ``--robust`` deben ser de +-4 %, no de un multiplo de la tasa.
+
+    Hubo un momento en que ``asetrate`` recibia el audio a la tasa nativa del
+    archivo y lo estiraba ~5,5x, dejando las variantes inservibles sin ningun
+    error visible. Esta prueba fija el contrato en segundos, que es lo
+    observable, y ademas verifica que sirvan para lo unico que existen:
+    reconocer una emisora que altera la velocidad.
+    """
+    import shutil
+    import tempfile
+
+    from scipy import signal as sps
+
+    from fonoscan.capture import decode_file
+    from fonoscan.catalog import ROBUST_SPEEDS
+
+    if shutil.which("ffmpeg") is None:
+        print("ffmpeg no disponible: prueba de variantes omitida")
+        return
+
+    SR_FUENTE, DUR = 44100, 40.0
+    pcm44 = sps.resample_poly(synth_track(4242, DUR), SR_FUENTE, SR).astype(np.float32)
+
+    tmp = tempfile.mkdtemp()
+    ruta = os.path.join(tmp, "ref.wav")
+    try:
+        _escribir_wav(ruta, pcm44, SR_FUENTE)
+
+        # 1. La duracion de cada variante es la que promete la documentacion.
+        for speed in ROBUST_SPEEDS:
+            obtenida = len(decode_file(ruta, SR, speed=speed)) / SR
+            esperada = DUR / speed
+            assert abs(obtenida - esperada) < 0.05, (
+                f"speed={speed}: {obtenida:.2f}s, se esperaba {esperada:.2f}s "
+                f"(factor {obtenida / esperada:.2f}x)"
+            )
+        print(f"duraciones de las {len(ROBUST_SPEEDS)} variantes: correctas")
+
+        # 2. Una emisora 4 % rapida no se reconoce sin variantes, y si con ellas.
+        #    La consulta se genera por otro camino (resample_poly) a proposito:
+        #    si se generara con decode_file la prueba seria circular.
+        base = decode_file(ruta, SR)
+        emitida = degrade(sps.resample_poly(base, 100, 104).astype(np.float32))
+        consulta = emitida[int(5 * SR) : int(15 * SR)]
+        qh, qt = fingerprint_arrays(consulta, QUERY_CONFIG)
+        policy = DecisionPolicy()
+
+        solo_1x = MemoryIndex.build(
+            [(*fingerprint_arrays(base, REFERENCE_CONFIG),
+              Reference(ref_id=1, track_id=1, speed=1.0, duration_s=len(base) / SR))],
+            config_id=REFERENCE_CONFIG.fingerprint_id(),
+        )
+        res = match(qh, qt, solo_1x, query_start_s=0.0)
+        sin_variantes = bool(res) and policy.decide(res[0]) == "accept"
+
+        entradas, rid = [], 0
+        for speed in ROBUST_SPEEDS:
+            rid += 1
+            v = decode_file(ruta, SR, speed=speed)
+            entradas.append((*fingerprint_arrays(v, REFERENCE_CONFIG),
+                             Reference(ref_id=rid, track_id=1, speed=speed,
+                                       duration_s=len(v) / SR)))
+        robusto = MemoryIndex.build(entradas, config_id=REFERENCE_CONFIG.fingerprint_id())
+        res_r = match(qh, qt, robusto, query_start_s=0.0)
+        con_variantes = bool(res_r) and policy.decide(res_r[0]) == "accept"
+
+        est_sin = "reconoce" if sin_variantes else "NO reconoce"
+        est_con = "reconoce" if con_variantes else "NO reconoce"
+        print(f"emisora 4 % rapida | solo 1.0x: {est_sin} | --robust: {est_con}")
+        if res_r:
+            ref = robusto.references[res_r[0].ref_id]
+            print(f"  variante que resolvio el match: speed={ref.speed}, "
+                  f"score={res_r[0].score}, margen={res_r[0].margin:.2f}")
+
+        assert con_variantes, "con --robust deberia reconocerse la emision acelerada"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_recognition_end_to_end()
     print()
     test_rejects_unknown_audio()
+    print()
+    test_speed_variants()
     print("\nTodas las pruebas pasaron.")
