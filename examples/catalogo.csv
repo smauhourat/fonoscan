@@ -1,0 +1,11 @@
+isrc,title,artist,label,album,year,audio_path,rights_owner_id,territory
+ARZZZ2600001,Milonga del puerto,Dúo Sur,Sello Austral,Antología 1,2026,examples/audio/track01.wav,TIT-001,AR
+ARZZZ2600002,Viento norte,Los Algarrobos,Sello Austral,Antología 2,2026,examples/audio/track02.wav,TIT-002,AR
+ARZZZ2600003,Zamba de la espera,Ana Quiroga,Discos Litoral,Antología 3,2026,examples/audio/track03.wav,TIT-003,AR
+ARZZZ2600004,Tren de las seis,Cuarteto Bermejo,Discos Litoral,Antología 4,2026,examples/audio/track04.wav,TIT-004,AR
+ARZZZ2600005,Luz de enero,Marta Vidal,Sello Austral,Antología 5,2026,examples/audio/track05.wav,TIT-005,AR
+ARZZZ2600006,Calle sin nombre,Los Algarrobos,Independiente,Antología 6,2026,examples/audio/track06.wav,TIT-006,AR
+ARZZZ2600007,Cortina institucional,Estudio Central,Independiente,Antología 7,2026,examples/audio/track07.wav,TIT-007,AR
+ARZZZ2600008,Río marrón,Ana Quiroga,Discos Litoral,Antología 8,2026,examples/audio/track08.wav,TIT-008,AR
+ARZZZ2600009,Chacarera del olvido,Dúo Sur,Sello Austral,Antología 9,2026,examples/audio/track09.wav,TIT-009,AR
+ARZZZ2600010,Nocturno 4 AM,Marta Vidal,Independiente,Antología 10,2026,examples/audio/track10.wav,TIT-010,AR

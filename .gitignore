@@ -7,3 +7,10 @@ plays/
 evidencia/
 .env
 .claude/settings.local.json
+
+# Material del demo de examples/: 193 MB reproducibles bit a bit con
+# `python examples/generar.py`. Se versiona el generador, no su salida.
+examples/audio/
+examples/*.wav
+examples/*.mp3
+examples/pases*.jsonl
